@@ -16,14 +16,8 @@ COPY . /app/
 # Install Alembic
 RUN pip install alembic
 
-# Set environment variable for Alembic configuration (optional)
-ENV ALEMBIC_CONFIG=/app/alembic.ini
-
-# Run Alembic migrations (you can modify this to suit your application)
-RUN alembic upgrade head
-
 # Expose the port FastAPI will run on
 EXPOSE 8000
 
-# Command to run FastAPI with Uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Command to run Alembic migrations and then start FastAPI with Uvicorn
+CMD alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000

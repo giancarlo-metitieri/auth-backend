@@ -1,7 +1,10 @@
 version: '3.8'
 
+networks:
+  network-1:
+
 services:
-  postgres:
+  auth_db:
     image: postgres:15  # Use the latest stable version of PostgreSQL
     container_name: postgres_auth_service
     environment:
@@ -9,9 +12,120 @@ services:
       POSTGRES_PASSWORD: password  # Replace with your desired password
       POSTGRES_DB: auth_service  # Replace with your desired database name
     ports:
-      - "5432:5432"  # Host:Container port mapping
+      - "5432"
+    networks:
+      - network-1
     volumes:
-      - postgres_data:/var/lib/postgresql/data  # Persistent storage
+      - auth_db_postgres_data:/var/lib/postgresql/data  # Persistent storage
+    deploy:
+      replicas: 1
+
+  auth_service:
+    image: gmetitieri/auth-backend
+    environment:
+      POSTGRES_USERNAME: dockeruser
+      POSTGRES_PASSWORD: password
+      POSTGRES_IP: auth_db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB_NAME: auth_service
+    ports:
+      - "8000"
+    networks:
+      - network-1
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+
+  class_db:
+    image: postgres:15
+    container_name: klassenverwaltung_db
+    environment:
+      POSTGRES_DB: klassen_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432"
+    networks:
+      - network-1
+    volumes:
+      - class_db_data:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+
+  klassenverwaltung-app:
+    image: krishbasra/klassenverwaltungbackend
+    depends_on:
+      - class_db
+    ports:
+      - "8080"
+    networks:
+      - network-1
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/klassen_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+
+  statistics_db:
+    image: postgres:14
+    container_name: statistics_postgres
+    ports:
+      - "5432"
+    networks:
+      - network-1
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: statistics_db
+    volumes:
+      - statistics_db_data:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+
+  statistics_backend:
+    image: zooyraa/statisticsbackend:latest
+    restart: always
+    depends_on:
+      - statistics_db
+    ports:
+      - "8080"
+    networks:
+      - network-1
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_USER: admin
+      DATABASE_PASSWORD: password
+      DATABASE_NAME: statistics_db
+      DATABASE_PORT: 5432
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "8080:80"   # Map host port 8080 to Nginx's port 80
+      - "8079:8079" # Map host port 8079 to Nginx's port 8079
+      - "8523:8523"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro  # Mount your Nginx config
+    networks:
+      - network-1
+    depends_on:
+      - klassenverwaltung-app
+      - statistics_backend
+    deploy:
+      replicas: 1  # Deploy 3 replicas of Nginx
+      restart_policy:
+        condition: on-failure
 
 volumes:
-  postgres_data:
+  auth_db_postgres_data:
+  class_db_data:
+  statistics_db_data:
+
